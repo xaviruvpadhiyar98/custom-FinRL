@@ -14,6 +14,10 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
 from stable_baselines3 import PPO
 import wandb
 
+wandb.tensorboard.patch(
+    root_logdir=Path(f"{TENSORBOARD_LOG_DIR}/{MODEL_NAME}").as_posix()
+)
+
 # wandb.init(sync_tensorboard=True, save_code=False)
 
 
@@ -33,7 +37,7 @@ trade_df = df.loc[train_size + 1 :]
 
 
 def train(config=None):
-    with wandb.init(config=config) as run:
+    with wandb.init(config=config, sync_tensorboard=True) as run:
         train_env = DummyVecEnv(
             [lambda: StockTradingEnv(train_df, TICKERS, TECHNICAL_INDICATORS)]
         )
@@ -85,7 +89,7 @@ def train(config=None):
 
 def main():
     sweep_id = wandb.sweep(WANDB_SWEEP_CONFIG, project=WANDB_PROJECT_NAME)
-    wandb.agent(sweep_id, train, count=5)
+    wandb.agent(sweep_id, train, count=10)
 
 
 if __name__ == "__main__":

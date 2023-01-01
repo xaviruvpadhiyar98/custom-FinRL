@@ -27,7 +27,7 @@ PERIOD = f"{360+7}d"
 
 TIMESTEPS = 10000
 MODEL_SAVE_AT_N_STEPS = 5000
-STEPS = 1
+STEPS = 10
 WANDB_PROJECT_NAME = "StockTradingRL"
 WANDB_SWEEP_CONFIG_FILE_PATH = Path(r"configs/wandb_sweep_config.yaml")
 WANDB_SWEEP_CONFIG = safe_load(WANDB_SWEEP_CONFIG_FILE_PATH.read_text())
