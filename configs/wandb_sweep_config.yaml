@@ -10,22 +10,27 @@ parameters:
     max: 0.01
   n_steps:
     values:
-      - 128
-      - 256
-      - 512
-      - 1024
-      - 2048
+      # - 128
+      # - 256
+      # - 512
+      # - 1024
+      # - 2048
+      # - 4096
+      - 8192
   learning_rate:
     distribution: log_uniform_values
     min: 0.00001
     max: 0.0001
-  # batch_size:
-  #   values:
-  #     - 32
-  #     - 64
-  #     - 128
-  #     - 256
-  #     - 512
+  batch_size:
+    values:
+      #     - 32
+      #     - 64
+      #     - 128
+      #     - 256
+      # - 512
+      # - 1024
+      # - 2048
+      - 8192
   clip_range:
     distribution: log_uniform_values
     min: 0.1

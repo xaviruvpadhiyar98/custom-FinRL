@@ -7,6 +7,7 @@ TRAINED_MODEL_DIR = "trained_models"
 MODEL_NAME = "ppo"
 TENSORBOARD_LOG_DIR = "tensorboard_log"
 RESULTS_DIR = "results"
+LOGS_DIR = "logs"
 RANDOM_DIR = int(time())
 
 # # Add your Stock here with time period from current to last n days
@@ -25,9 +26,8 @@ TECHNICAL_INDICATORS = [
 INTERVAL = "1h"
 PERIOD = f"{360+7}d"
 
-TIMESTEPS = 10000
+TIMESTEPS = 100_000
 MODEL_SAVE_AT_N_STEPS = 5000
-STEPS = 10
 WANDB_PROJECT_NAME = "StockTradingRL"
 WANDB_SWEEP_CONFIG_FILE_PATH = Path(r"configs/wandb_sweep_config.yaml")
 WANDB_SWEEP_CONFIG = safe_load(WANDB_SWEEP_CONFIG_FILE_PATH.read_text())
