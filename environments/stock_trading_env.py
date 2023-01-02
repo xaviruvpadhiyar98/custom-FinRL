@@ -1,6 +1,7 @@
 from copy import copy
 from gym import Env, spaces
 import numpy as np
+from collections import deque
 
 
 class StockTradingEnv(Env):
@@ -24,6 +25,7 @@ class StockTradingEnv(Env):
             shape=(self.obs_formula,),
             dtype=np.float32,
         )
+        self.last_2_holdings = deque(maxlen=2)
 
     def reset(self):
         self.reward = 0.0
@@ -54,10 +56,12 @@ class StockTradingEnv(Env):
                 self.sell(price_per_share, number_of_shares_index)
 
         current_holdings, shares_available = self.get_holdings()
-        if not self.info:
-            previous_holdings = current_holdings
-        else:
-            previous_holdings = next(reversed(self.info.values()))["current_holdings"]
+        self.last_2_holdings.append(current_holdings)
+        previous_holdings = self.last_2_holdings[0]
+        #         if not self.info:
+        #             previous_holdings = current_holdings
+        #         else:
+        #             previous_holdings = next(reversed(self.info.values()))["current_holdings"]
 
         self.info[str(self.data["Date"].values[0])] = {
             "current_holdings": current_holdings,
