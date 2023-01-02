@@ -2,6 +2,9 @@ from copy import copy
 from gym import Env, spaces
 import numpy as np
 from collections import deque
+import quantstats as qs
+
+qs.extend_pandas()
 
 
 class StockTradingEnv(Env):
@@ -9,8 +12,8 @@ class StockTradingEnv(Env):
     INITIAL_AMOUNT = 100_000
     BUY_COST = SELL_COST = 0.001
 
-    def __init__(self, df, tickers, features):
-        self.df = df
+    def __init__(self, arrays, tickers, features):
+        self.arrays = arrays
         self.tickers = tickers
         self.features = features
         self.num_of_features = len(features)
@@ -35,7 +38,7 @@ class StockTradingEnv(Env):
 
     def step(self, actions):
         actions = np.rint(actions)
-        done = bool(self.index == self.df.index[-1])
+        done = bool(self.index == len(self.arrays) - 1)
         if done:
             return (self.state, self.reward, done, self.info)
 
@@ -58,12 +61,8 @@ class StockTradingEnv(Env):
         current_holdings, shares_available = self.get_holdings()
         self.last_2_holdings.append(current_holdings)
         previous_holdings = self.last_2_holdings[0]
-        #         if not self.info:
-        #             previous_holdings = current_holdings
-        #         else:
-        #             previous_holdings = next(reversed(self.info.values()))["current_holdings"]
 
-        self.info[str(self.data["Date"].values[0])] = {
+        self.info[self.index] = {
             "current_holdings": current_holdings,
             "shares": shares_available,
         }
@@ -101,14 +100,10 @@ class StockTradingEnv(Env):
         if not reset:
             self.index += 1
         else:
-            self.index = self.df.index.values[0]
+            self.index = 0
 
-        self.data = self.df.loc[self.index]
+        vals = self.arrays[self.index].reshape(-1)
         state = np.array([self.INITIAL_AMOUNT])
-
-        vals = self.data[["Close"] + self.features + ["Buy/Sold/Hold"]].values.reshape(
-            -1
-        )
         state = np.append(state, vals)
 
         if reset:
@@ -132,3 +127,101 @@ class StockTradingEnv(Env):
         if change_in_holdings > 0:
             return change_in_holdings * 0.1
         return change_in_holdings * -0.1
+
+
+def calculate_sharpe_and_get_ending_amount(info):
+    last_key = next(reversed(info))
+    if not last_key[:4].isdigit():
+        info.pop(last_key)
+
+    current_holdings = np.array([value["current_holdings"] for value in info.values()])
+
+    # Calculate the daily returns
+    returns = (current_holdings[1:] - current_holdings[:-1]) / current_holdings[:-1]
+
+    mean_returns = np.mean(returns)
+    std_returns = np.std(returns)
+    sharpe_ratio = (mean_returns - 0.0) / std_returns
+    return sharpe_ratio, current_holdings[-1]
+
+
+if __name__ == "__main__":
+    import pandas as pd
+    from stable_baselines3.common.env_util import make_vec_env
+    from stable_baselines3.common.monitor import Monitor
+    from pathlib import Path
+    from stable_baselines3 import PPO, A2C
+
+    # # Add your Stock here with time period from current to last n days
+    TICKERS = [
+        "TCS.NS",
+        "BAJFINANCE.NS",
+        "WIPRO.NS",
+        "CANBK.NS",
+        "IGL.NS",
+        "TATACONSUM.NS",
+    ]
+    TICKERS.sort()
+
+    # Dont Modify the below for now
+    TECHNICAL_INDICATORS = [
+        "EMA_8",
+        "EMA_21",
+        "RSI_14",
+        "BBAND_UP",
+        "BBAND_MID",
+        "BBAND_DOWN",
+    ]
+
+    TENSORBOARD_LOG_DIR = "tensorboard_log"
+    MODEL_NAME = "PPO"
+    df = pd.read_csv(f"datasets/{'-'.join(TICKERS)}")
+    df = df.set_index("Unnamed: 0")
+    train_size = df.index.values[-1] - int(df.index.values[-1] * 0.10)
+    train_df = df.loc[:train_size]
+    trade_df = df.loc[train_size + 1 :]
+    train_vals = train_df[["Close"] + TECHNICAL_INDICATORS + ["Buy/Sold/Hold"]]
+    train_arrays = (
+        train_df[["Close"] + TECHNICAL_INDICATORS + ["Buy/Sold/Hold"]]
+        .groupby(train_df.index)
+        .apply(np.array)
+        .values
+    )
+    trade_arrays = (
+        trade_df[["Close"] + TECHNICAL_INDICATORS + ["Buy/Sold/Hold"]]
+        .groupby(trade_df.index)
+        .apply(np.array)
+        .values
+    )
+
+    num_cpu = 10000
+    n_steps = 200
+    env_id = StockTradingEnv
+    env_kwargs = {
+        "arrays": train_arrays,
+        "tickers": TICKERS,
+        "features": TECHNICAL_INDICATORS,
+    }
+
+    train_env = make_vec_env(env_id=env_id, n_envs=num_cpu, env_kwargs=env_kwargs)
+    # train_env = Monitor(StockTradingEnv(train_arrays, TICKERS, TECHNICAL_INDICATORS))
+    model_ppo = PPO(
+        policy="MlpPolicy",
+        env=train_env,
+        verbose=0,
+        tensorboard_log=Path(f"{TENSORBOARD_LOG_DIR}/{MODEL_NAME}"),
+        batch_size=(num_cpu * n_steps) // 2,
+        n_steps=n_steps
+        # device="cpu",
+    )
+    model_ppo.learn(100_000, progress_bar=True)
+
+    trade_env = Monitor(StockTradingEnv(trade_arrays, TICKERS, TECHNICAL_INDICATORS))
+    obs = trade_env.reset()
+    while True:
+        action, _states = model_ppo.predict(obs)
+        (state, reward, done, info) = trade_env.step(action)
+        if done:
+            (sharpe, ending_amount) = calculate_sharpe_and_get_ending_amount(info)
+            print(sharpe, ending_amount)
+            break
