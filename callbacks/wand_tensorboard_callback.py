@@ -11,8 +11,7 @@ class TensorboardCallback(BaseCallback):
     def _on_step(self) -> bool:
         self.logger.record(key="train/reward", value=self.locals["rewards"][0])
         holding_plus_shares = self.locals["infos"][-1].popitem()
-
-        if holding_plus_shares[0][:4].isdigit():
+        if isinstance(holding_plus_shares[0], int):
             holdings = holding_plus_shares[1]["current_holdings"]
             shares = np.sum(holding_plus_shares[1]["shares"])
             self.logger.record(key="train/holdings", value=holdings)

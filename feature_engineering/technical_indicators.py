@@ -1,6 +1,8 @@
+from typing import List
 from talib import EMA, RSI, BBANDS, MA_Type
 import quantstats as qs
 import pandas as pd
+import numpy as np
 
 qs.extend_pandas()
 
@@ -34,27 +36,18 @@ def add_buy_sell_hold_single_column(df):
     return df
 
 
-def calculate_sharpe_and_get_ending_amount(info):
-    try:
-        last_key = next(reversed(info[0]))
-        if not last_key[:4].isdigit():
-            info[0].pop(last_key)
-            # print(info)
+def calculate_sharpe_and_get_ending_amount(infos: List[dict]):
+    last_key = next(reversed(infos))
+    if isinstance(last_key, str):
+        infos.pop(last_key)
 
-        df = pd.DataFrame.from_dict(info[0], orient="index")
-        df["Daily Return"] = df["current_holdings"].pct_change(1)
-        stock = df["Daily Return"]
-        sharpe = qs.stats.sharpe(stock)
-        ending_amount = df["current_holdings"].values[-1]
-        return (sharpe, ending_amount)
-    except Exception as e:
-        from traceback import print_exc
-        import sys
-
-        # print(info)
-
-        print(print_exc())
-        sys.exit()
+    info = infos[0].values()
+    current_holdings = np.array(
+        [i["current_holdings"] for i in info if "current_holdings" in i]
+    )
+    returns = (current_holdings[1:] - current_holdings[:-1]) / current_holdings[:-1]
+    sharpe_ratio = np.mean(returns) / np.std(returns)
+    return sharpe_ratio, current_holdings[-1]
 
 
 # import numpy as np

@@ -131,17 +131,12 @@ class StockTradingEnv(Env):
 
 def calculate_sharpe_and_get_ending_amount(info):
     last_key = next(reversed(info))
-    if not last_key[:4].isdigit():
+    if not isinstance(last_key, int):
         info.pop(last_key)
 
     current_holdings = np.array([value["current_holdings"] for value in info.values()])
-
-    # Calculate the daily returns
     returns = (current_holdings[1:] - current_holdings[:-1]) / current_holdings[:-1]
-
-    mean_returns = np.mean(returns)
-    std_returns = np.std(returns)
-    sharpe_ratio = (mean_returns - 0.0) / std_returns
+    sharpe_ratio = np.mean(returns) / np.std(returns)
     return sharpe_ratio, current_holdings[-1]
 
 
@@ -150,8 +145,11 @@ if __name__ == "__main__":
     from stable_baselines3.common.env_util import make_vec_env
     from stable_baselines3.common.monitor import Monitor
     from pathlib import Path
-    from stable_baselines3 import PPO, A2C
+    from stable_baselines3 import PPO
+    from stable_baselines3.common.evaluation import evaluate_policy
+    from pytorch_lightning import seed_everything
 
+    seed_everything(20)
     # # Add your Stock here with time period from current to last n days
     TICKERS = [
         "TCS.NS",
@@ -180,7 +178,6 @@ if __name__ == "__main__":
     train_size = df.index.values[-1] - int(df.index.values[-1] * 0.10)
     train_df = df.loc[:train_size]
     trade_df = df.loc[train_size + 1 :]
-    train_vals = train_df[["Close"] + TECHNICAL_INDICATORS + ["Buy/Sold/Hold"]]
     train_arrays = (
         train_df[["Close"] + TECHNICAL_INDICATORS + ["Buy/Sold/Hold"]]
         .groupby(train_df.index)
@@ -194,8 +191,8 @@ if __name__ == "__main__":
         .values
     )
 
-    num_cpu = 10000
-    n_steps = 200
+    num_cpu = 2
+    n_steps = 8000
     env_id = StockTradingEnv
     env_kwargs = {
         "arrays": train_arrays,
@@ -204,18 +201,15 @@ if __name__ == "__main__":
     }
 
     train_env = make_vec_env(env_id=env_id, n_envs=num_cpu, env_kwargs=env_kwargs)
-    # train_env = Monitor(StockTradingEnv(train_arrays, TICKERS, TECHNICAL_INDICATORS))
     model_ppo = PPO(
         policy="MlpPolicy",
         env=train_env,
         verbose=0,
         tensorboard_log=Path(f"{TENSORBOARD_LOG_DIR}/{MODEL_NAME}"),
         batch_size=(num_cpu * n_steps) // 2,
-        n_steps=n_steps
-        # device="cpu",
+        n_steps=n_steps,
     )
-    model_ppo.learn(100_000, progress_bar=True)
-
+    # model_ppo.learn(10_000 * num_cpu, progress_bar=True)
     trade_env = Monitor(StockTradingEnv(trade_arrays, TICKERS, TECHNICAL_INDICATORS))
     obs = trade_env.reset()
     while True:

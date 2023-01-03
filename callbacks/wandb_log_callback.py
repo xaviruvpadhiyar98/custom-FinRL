@@ -12,5 +12,6 @@ class WandDBLogCallback(BaseCallback):
     def _on_step(self) -> bool:
         info = self.locals["infos"]
         sharpe, ending_amount = calculate_sharpe_and_get_ending_amount(info)
-        wandb.log({"Sharpe": sharpe, "Ending Amount": ending_amount})
+        # wandb.log({"Sharpe": sharpe, "Ending Amount": ending_amount})
+        print({"Sharpe": sharpe, "Ending Amount": ending_amount})
         return True
